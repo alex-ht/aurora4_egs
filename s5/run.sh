@@ -56,12 +56,14 @@ steps/train_mono.sh --boost-silence 1.25 --nj 8  \
 # steps/decode.sh --nj 8  \
 #   exp/mono0a_${training}/graph_tgpr data/test_eval92 exp/mono0a_${training}/decode_tgpr_eval92 
 #) &
+fi
 if [ $stage -le 2 ]; then
 steps/align_si.sh --boost-silence 1.25 --nj 8  \
    data/train_si84_${training} data/lang exp/mono0a_${training} exp/mono0a_${training}_ali || exit 1;
-fi
+
 steps/train_deltas.sh --boost-silence 1.25 \
     2000 10000 data/train_si84_${training} data/lang exp/mono0a_${training}_ali exp/tri1_${training} || exit 1;
+fi
 #while [ ! -f data/lang_test_tgpr/tmp/LG.fst ] || \
 #   [ -z data/lang_test_tgpr/tmp/LG.fst ]; do
 #  sleep 20;
@@ -102,34 +104,35 @@ if [ $stage -le 7 ]; then
 #RBM pretrain
 dir=exp/tri3a_${training}_dnn_pretrain
 $cuda_cmd $dir/_pretrain_dbn.log \
-  steps/nnet/pretrain_dbn.sh --use-gpu-id 0 --nn-depth 7 --rbm-iter 3 data-fbank/train_si84_${training} $dir
+  steps/nnet/pretrain_dbn.sh --nn-depth 4 --rbm-iter 3 data-fbank/train_si84_${training} $dir
 fi
-
 dir=exp/tri3a_${training}_dnn
 ali=exp/tri2b_${training}_ali_si84
 ali_dev=exp/tri2b_${training}_ali_dev_0330
 feature_transform=exp/tri3a_${training}_dnn_pretrain/final.feature_transform
-dbn=exp/tri3a_${training}_dnn_pretrain/7.dbn
+dbn=exp/tri3a_${training}_dnn_pretrain/4.dbn
 if [ $stage -le 8 ]; then
 $cuda_cmd $dir/_train_nnet.log \
   steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 \
   data-fbank/train_si84_${training} data-fbank/dev_0330 data/lang $ali $ali_dev $dir || exit 1;
 fi
 if [ $stage -le 9 ]; then
-utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri3a_${training}_dnn exp/tri3a_${training}_dnn/graph_tgpr_5k || exit 1;
+  if [ ! -f exp/tri3a_${training}_dnn/graph_tgpr_5k/HCLG.fst ]; then
+    utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri3a_${training}_dnn exp/tri3a_${training}_dnn/graph_tgpr_5k || exit 1;
+  fi
 dir=exp/tri3a_${training}_dnn
-steps/nnet/decode.sh --nj 8 --acwt 0.10 --config conf/decode_dnn.config \
+steps/nnet/decode.sh --nj 1 --acwt 0.10 --use-gpu yes --config conf/decode_dnn.config \
   exp/tri3a_${training}_dnn/graph_tgpr_5k data-fbank/test_eval92 $dir/decode_tgpr_5k_eval92 || exit 1;
 fi
-
 exit 0;
+if [ $stage -le 10 ]; then
 #realignments
 srcdir=exp/tri3a_dnn
 steps/nnet/align.sh --nj 8 \
   data-fbank/train_si84_${training} data/lang $srcdir ${srcdir}_ali_si84_${training} || exit 1;
 steps/nnet/align.sh --nj 8 \
   data-fbank/dev_0330 data/lang $srcdir ${srcdir}_ali_dev_0330 || exit 1;
-
+fi
 #train system again 
 
 dir=exp/tri4a_dnn
@@ -138,7 +141,7 @@ ali_dev=exp/tri3a_dnn_ali_dev_0330
 feature_transform=exp/tri3a_dnn_pretrain/final.feature_transform
 dbn=exp/tri3a_dnn_pretrain/7.dbn
 $cuda_cmd $dir/_train_nnet.log \
-  steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 --use-gpu-id 0 \
+  steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 \
   data-fbank/train_si84_multi data-fbank/dev_0330 data/lang $ali $ali_dev $dir || exit 1;
 
 utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri4a_dnn exp/tri4a_dnn/graph_tgpr_5k || exit 1;
