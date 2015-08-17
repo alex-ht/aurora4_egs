@@ -2,7 +2,7 @@
 
 . ./cmd.sh ## You'll want to change cmd.sh to something that will work on your system.
            ## This relates to the queue.
-
+. ./path.sh
 # This is a shell script, but it's recommended that you run the commands one by
 # one by copying and pasting into the shell.
 
@@ -36,13 +36,13 @@ for x in train_si84_${training} test_eval92 test_0166 dev_0330 dev_1206; do
 done
 
 # make fbank features
-fbankdir=fbank
-mkdir -p data-fbank
-for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
-  cp -r data/$x data-fbank/$x
-  steps/make_fbank.sh --nj 8 \
-    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
-done
+#fbankdir=fbank
+#mkdir -p data-fbank
+#for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
+#  cp -r data/$x data-fbank/$x
+#  steps/make_fbank.sh --nj 8 \
+#    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
+#done
 fi
 if [ $stage -le 1 ]; then
 # Note: the --boost-silence option should probably be omitted by default
@@ -59,10 +59,10 @@ steps/train_mono.sh --boost-silence 1.25 --nj 8  \
 fi
 if [ $stage -le 2 ]; then
 steps/align_si.sh --boost-silence 1.25 --nj 8  \
-   data/train_si84_${training} data/lang exp/mono0a_${training} exp/mono0a_${training}_ali || exit 1;
+  data/train_si84_${training} data/lang exp/mono0a_${training} exp/mono0a_${training}_ali || exit 1;
 
 steps/train_deltas.sh --boost-silence 1.25 \
-    2000 10000 data/train_si84_${training} data/lang exp/mono0a_${training}_ali exp/tri1_${training} || exit 1;
+  2000 10000 data/train_si84_${training} data/lang exp/mono0a_${training}_ali exp/tri1_${training} || exit 1;
 fi
 #while [ ! -f data/lang_test_tgpr/tmp/LG.fst ] || \
 #   [ -z data/lang_test_tgpr/tmp/LG.fst ]; do
@@ -99,56 +99,38 @@ steps/align_si.sh  --nj 8 \
   data/dev_1206 data/lang exp/tri2b_${training} exp/tri2b_${training}_ali_dev_1206 || exit 1;
 fi
 echo "Now begin train DNN systems on ${training} data"
-. ./path.sh
+
 if [ $stage -le 7 ]; then
-#RBM pretrain
+# RBM pretrain
 dir=exp/tri3a_${training}_dnn_pretrain
 $cuda_cmd $dir/_pretrain_dbn.log \
-  steps/nnet/pretrain_dbn.sh --nn-depth 4 --rbm-iter 3 data-fbank/train_si84_${training} $dir
+  steps/nnet/pretrain_dbn.sh --nn-depth 4 --rbm-iter 3 data/train_si84_${training} $dir
 fi
 dir=exp/tri3a_${training}_dnn
 ali=exp/tri2b_${training}_ali_si84
-ali_dev=exp/tri2b_${training}_ali_dev_0330
+ali_dev=exp/tri2b_${training}_ali_dev_1206
 feature_transform=exp/tri3a_${training}_dnn_pretrain/final.feature_transform
 dbn=exp/tri3a_${training}_dnn_pretrain/4.dbn
 if [ $stage -le 8 ]; then
 $cuda_cmd $dir/_train_nnet.log \
   steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 \
-  data-fbank/train_si84_${training} data-fbank/dev_0330 data/lang $ali $ali_dev $dir || exit 1;
+  data/train_si84_${training} data/dev_1206 data/lang $ali $ali_dev $dir || exit 1;
 fi
 if [ $stage -le 9 ]; then
-  if [ ! -f exp/tri3a_${training}_dnn/graph_tgpr_5k/HCLG.fst ]; then
-    utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri3a_${training}_dnn exp/tri3a_${training}_dnn/graph_tgpr_5k || exit 1;
-  fi
+if [ ! -f exp/tri3a_${training}_dnn/graph_tgpr_5k/HCLG.fst ]; then
+  utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri3a_${training}_dnn exp/tri3a_${training}_dnn/graph_tgpr_5k || exit 1;
+fi
 dir=exp/tri3a_${training}_dnn
 steps/nnet/decode.sh --nj 1 --acwt 0.10 --use-gpu yes --config conf/decode_dnn.config \
-  exp/tri3a_${training}_dnn/graph_tgpr_5k data-fbank/test_eval92 $dir/decode_tgpr_5k_eval92 || exit 1;
+  exp/tri3a_${training}_dnn/graph_tgpr_5k data/dev_0330 $dir/decode_tgpr_5k_dev0330 || exit 1;
+fi
+#
+
+
+if [ $stage -le 100 ]; then
+for d in `ls -d exp/*/*decode*`; do
+  echo $d;
+  cat ${d}/wer_* | utils/best_wer.sh;
+done
 fi
 exit 0;
-if [ $stage -le 10 ]; then
-#realignments
-srcdir=exp/tri3a_dnn
-steps/nnet/align.sh --nj 8 \
-  data-fbank/train_si84_${training} data/lang $srcdir ${srcdir}_ali_si84_${training} || exit 1;
-steps/nnet/align.sh --nj 8 \
-  data-fbank/dev_0330 data/lang $srcdir ${srcdir}_ali_dev_0330 || exit 1;
-fi
-#train system again 
-
-dir=exp/tri4a_dnn
-ali=exp/tri3a_dnn_ali_si84_multi
-ali_dev=exp/tri3a_dnn_ali_dev_0330
-feature_transform=exp/tri3a_dnn_pretrain/final.feature_transform
-dbn=exp/tri3a_dnn_pretrain/7.dbn
-$cuda_cmd $dir/_train_nnet.log \
-  steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 \
-  data-fbank/train_si84_multi data-fbank/dev_0330 data/lang $ali $ali_dev $dir || exit 1;
-
-utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri4a_dnn exp/tri4a_dnn/graph_tgpr_5k || exit 1;
-dir=exp/tri4a_dnn
-steps/nnet/decode.sh --nj 8 --acwt 0.10 --config conf/decode_dnn.config \
-  exp/tri4a_dnn/graph_tgpr_5k data-fbank/test_eval92 $dir/decode_tgpr_5k_eval92 || exit 1;
-
-
-# DNN Sequential DT training
-#......
