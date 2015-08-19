@@ -10,9 +10,9 @@ stage=0
 decode_mbr=true
 reverse=false
 word_ins_penalty=0.0
-min_lmwt=9
-max_lmwt=20
-subset=true
+min_lmwt=4
+max_lmwt=15
+#subset=true
 #end configuration section.
 
 [ -f ./path.sh ] && . ./path.sh
@@ -64,16 +64,17 @@ $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/score.LMWT.log \
     utils/int2sym.pl -f 2- $symtab \| sed 's:\<UNK\>::g' \| \
     compute-wer --text --mode=present \
      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_LMWT || exit 1;
-if $subset; than
+#if $subset; than
+rm -f $dir/all_wer*
 for LMWT in `seq $min_lmwt 1 $max_lmwt`; do
   for S in 1 2 3 4 5 6 7 8 9 a b c d e; do
   cat $dir/scoring/${LMWT}.tra | \
-    utils/int2sym.pl -f -2 $symtab | sed 's:<UNK>::g' | \
+    utils/int2sym.pl -f 2- $symtab | sed 's:<UNK>::g' | \
     grep "$S " | \
     compute-wer --text --mode=present \
-      ark:$dir/scoring/test_filt.txt ark,p:- | \
-    grep "%WER" > $dir/all_wer_$LMWT
+      ark,p:$dir/scoring/test_filt.txt ark,p:- | \
+    grep "%WER" >> $dir/all_wer_$LMWT
   done
 done
-fi
+#fi
 exit 0;
