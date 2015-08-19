@@ -36,13 +36,13 @@ for x in train_si84_${training} test_eval92 test_0166 dev_0330 dev_1206; do
 done
 
 # make fbank features
-#fbankdir=fbank
-#mkdir -p data-fbank
-#for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
-#  cp -r data/$x data-fbank/$x
-#  steps/make_fbank.sh --nj 8 \
-#    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
-#done
+fbankdir=fbank
+mkdir -p data-fbank
+for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
+  cp -r data/$x data-fbank/$x
+  steps/make_fbank.sh --nj 8 \
+    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
+done
 fi
 if [ $stage -le 1 ]; then
 # Note: the --boost-silence option should probably be omitted by default
@@ -112,16 +112,19 @@ ali_dev=exp/tri2b_${training}_ali_dev_1206
 feature_transform=exp/tri3a_${training}_dnn_pretrain/final.feature_transform
 dbn=exp/tri3a_${training}_dnn_pretrain/4.dbn
 if [ $stage -le 8 ]; then
+# Fine turning
 $cuda_cmd $dir/_train_nnet.log \
   steps/nnet/train.sh --feature-transform $feature_transform --dbn $dbn --hid-layers 0 --learn-rate 0.008 \
-  data/train_si84_${training} data/dev_1206 data/lang $ali $ali_dev $dir || exit 1;
+    data/train_si84_${training} data/dev_1206 data/lang $ali $ali_dev $dir || exit 1;
 fi
 if [ $stage -le 9 ]; then
+# make HCLG
 if [ ! -f exp/tri3a_${training}_dnn/graph_tgpr_5k/HCLG.fst ]; then
   utils/mkgraph.sh data/lang_test_tgpr_5k exp/tri3a_${training}_dnn exp/tri3a_${training}_dnn/graph_tgpr_5k || exit 1;
 fi
+# decode
 dir=exp/tri3a_${training}_dnn
-steps/nnet/decode.sh --nj 1 --acwt 0.10 --use-gpu yes --config conf/decode_dnn.config \
+steps/nnet/decode.sh --cmd "$cuda_cmd" --nj 1 --acwt 0.10 --use-gpu yes --config conf/decode_dnn.config \
   exp/tri3a_${training}_dnn/graph_tgpr_5k data/dev_0330 $dir/decode_tgpr_5k_dev0330 || exit 1;
 fi
 #
