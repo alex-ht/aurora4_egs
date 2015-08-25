@@ -36,13 +36,13 @@ for x in train_si84_${training} test_eval92 test_0166 dev_0330 dev_1206; do
 done
 
 # make fbank features
-fbankdir=fbank
-mkdir -p data-fbank
-for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
-  cp -r data/$x data-fbank/$x
-  steps/make_fbank.sh --nj 8 \
-    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
-done
+#fbankdir=fbank
+#mkdir -p data-fbank
+#for x in train_si84_${training} dev_0330 dev_1206 test_eval92 test_0166; do
+#  cp -r data/$x data-fbank/$x
+#  steps/make_fbank.sh --nj 8 \
+#    data-fbank/$x exp/make_fbank/$x $fbankdir || exit 1;
+#done
 fi
 if [ $stage -le 1 ]; then
 # Note: the --boost-silence option should probably be omitted by default
