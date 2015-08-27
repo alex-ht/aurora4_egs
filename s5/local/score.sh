@@ -67,7 +67,7 @@ $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/score.LMWT.log \
 #if $subset; than
 rm -f $dir/all_wer*
 for LMWT in `seq $min_lmwt 1 $max_lmwt`; do
-  for S in 1 2 3 4 5 6 7 8 9 a b c d e; do
+  for S in 0 1 2 3 4 5 6 7 8 9 a b c d; do
   cat $dir/scoring/${LMWT}.tra | \
     utils/int2sym.pl -f 2- $symtab | sed 's:<UNK>::g' | \
     grep "$S " | \
