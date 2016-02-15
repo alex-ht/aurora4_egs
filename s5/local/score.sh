@@ -72,7 +72,7 @@ for LMWT in `seq $min_lmwt 1 $max_lmwt`; do
     utils/int2sym.pl -f 2- $symtab | sed 's:<UNK>::g' | \
     grep "$S " | \
     compute-wer --text --mode=present \
-      ark,p:$dir/scoring/test_filt.txt ark,p:- | \
+      "ark,p:cat $dir/scoring/test_filt.txt | grep '$S ' |" ark,p:- | \
     grep "%WER" >> $dir/all_wer_$LMWT
   done
 done
